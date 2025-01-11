@@ -1,202 +1,156 @@
-const User = require('./models/User');
-const Village = require('./models/Village');
-const Population = require('./models/Population');
+const Admin = require('./models/Admin');
+const Message = require('./models/Message');
+const Image = require('./models/Image');
 
 const resolvers = {
   Query: {
-    // Authentication
-    me: async (_, __, context) => {
-      if (!context.user) {
-        throw new Error('Not authenticated');
-      }
-      return context.user;
-    },
-
-    // Villages
-    villages: async () => {
+    admins: async () => {
       try {
-        const villages = await Village.find();
-        return villages;
+        return await Admin.find();
       } catch (error) {
-        throw new Error('Failed to fetch villages');
+        throw new Error('Failed to fetch admins');
       }
     },
-
-    village: async (_, { id }) => {
+    admin: async (_, { id }) => {
       try {
-        const village = await Village.findById(id);
-        if (!village) {
-          throw new Error('Village not found');
+        const admin = await Admin.findById(id);
+        if (!admin) {
+          throw new Error('Admin not found');
         }
-        return village;
+        return admin;
       } catch (error) {
-        throw new Error('Failed to fetch village');
+        throw new Error('Failed to fetch admin');
       }
     },
-
-    // Population
-    populationByVillage: async (_, { villageId }) => {
+    messages: async () => {
       try {
-        const populationData = await Population.find({ villageId });
-        return populationData;
+        return await Message.find().sort({ timestamp: 1 });
       } catch (error) {
-        throw new Error('Failed to fetch population data');
+        throw new Error('Failed to fetch messages');
       }
     },
-
-    // Overview
-    populationData: async () => {
+    message: async (_, { id }) => {
       try {
-        const villages = await Village.find();
-        return villages.map(village => ({
-          name: village.name,
-          population: village.population,
-        }));
+        const message = await Message.findById(id);
+        if (!message) {
+          throw new Error('Message not found');
+        }
+        return message;
       } catch (error) {
-        throw new Error('Failed to fetch population data');
+        throw new Error('Failed to fetch message');
       }
     },
-
-    ageDistribution: async () => {
+    images: async () => {
       try {
-        const ageGroups = await Population.aggregate([
-          { $group: { _id: '$ageGroup', total: { $sum: '$count' } } },
-        ]);
-        return ageGroups.map(group => ({
-          ageGroup: group._id,
-          total: group.total,
-        }));
+        return await Image.find();
       } catch (error) {
-        throw new Error('Failed to fetch age distribution data');
+        throw new Error('Failed to fetch images');
       }
     },
-
-    genderRatio: async () => {
+    image: async (_, { id }) => {
       try {
-        const genders = await Population.aggregate([
-          { $group: { _id: '$gender', total: { $sum: '$count' } } },
-        ]);
-        return genders.map(gender => ({
-          gender: gender._id,
-          total: gender.total,
-        }));
+        const image = await Image.findById(id);
+        if (!image) {
+          throw new Error('Image not found');
+        }
+        return image;
       } catch (error) {
-        throw new Error('Failed to fetch gender ratio data');
-      }
-    },
-
-    mapData: async () => {
-      try {
-        const villages = await Village.find();
-        return villages.map(village => ({
-          name: village.name,
-          coordinates: village.coordinates,
-        }));
-      } catch (error) {
-        throw new Error('Failed to fetch map data');
+        throw new Error('Failed to fetch image');
       }
     },
   },
-
   Mutation: {
-    // Authentication
-    signup: async (_, { username, password, role }) => {
+    addAdmin: async (_, { input }) => {
       try {
-        const user = new User({ username, password, role });
-        await user.save();
-        const token = user.generateAuthToken(); // Use the method from the User model
-        return { token, user };
+        const newAdmin = new Admin(input);
+        await newAdmin.save();
+        return newAdmin;
       } catch (error) {
-        throw new Error(error.message);
+        throw new Error('Failed to add admin');
       }
     },
-
-    signin: async (_, { username, password }) => {
+    updateAdmin: async (_, { id, input }) => {
       try {
-        const user = await User.findOne({ username });
-        if (!user) {
-          throw new Error('User not found');
+        const updatedAdmin = await Admin.findByIdAndUpdate(id, input, { new: true });
+        if (!updatedAdmin) {
+          throw new Error('Admin not found');
         }
-
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) {
-          throw new Error('Invalid credentials');
+        return updatedAdmin;
+      } catch (error) {
+        throw new Error('Failed to update admin');
+      }
+    },
+    deleteAdmin: async (_, { id }) => {
+      try {
+        const deletedAdmin = await Admin.findByIdAndDelete(id);
+        if (!deletedAdmin) {
+          throw new Error('Admin not found');
         }
-
-        const token = user.generateAuthToken(); // Use the method from the User model
-        return { token, user };
+        return deletedAdmin;
       } catch (error) {
-        throw new Error(error.message);
+        throw new Error('Failed to delete admin');
       }
     },
-
-    // Villages
-    addVillage: async (_, { name, population, landArea, urbanAreas, coordinates }) => {
+    addMessage: async (_, { input }) => {
       try {
-        const village = new Village({ name, population, landArea, urbanAreas, coordinates });
-        await village.save();
-        return village;
+        const newMessage = new Message(input);
+        await newMessage.save();
+        return newMessage;
       } catch (error) {
-        throw new Error('Failed to add village');
+        throw new Error('Failed to add message');
       }
     },
-
-    updateVillage: async (_, { id, updates }) => {
+    updateMessage: async (_, { id, input }) => {
       try {
-        const village = await Village.findByIdAndUpdate(id, updates, { new: true });
-        if (!village) {
-          throw new Error('Village not found');
+        const updatedMessage = await Message.findByIdAndUpdate(id, input, { new: true });
+        if (!updatedMessage) {
+          throw new Error('Message not found');
         }
-        return village;
+        return updatedMessage;
       } catch (error) {
-        throw new Error('Failed to update village');
+        throw new Error('Failed to update message');
       }
     },
-
-    deleteVillage: async (_, { id }) => {
+    deleteMessage: async (_, { id }) => {
       try {
-        const village = await Village.findByIdAndDelete(id);
-        if (!village) {
-          throw new Error('Village not found');
+        const deletedMessage = await Message.findByIdAndDelete(id);
+        if (!deletedMessage) {
+          throw new Error('Message not found');
         }
-        return village;
+        return deletedMessage;
       } catch (error) {
-        throw new Error('Failed to delete village');
+        throw new Error('Failed to delete message');
       }
     },
-
-    // Population
-    addPopulationData: async (_, { villageId, ageGroup, gender, count }) => {
+    addImage: async (_, { input }) => {
       try {
-        const populationData = new Population({ villageId, ageGroup, gender, count });
-        await populationData.save();
-        return populationData;
+        const newImage = new Image(input);
+        await newImage.save();
+        return newImage;
       } catch (error) {
-        throw new Error('Failed to add population data');
+        throw new Error('Failed to add image');
       }
     },
-
-    updatePopulationData: async (_, { id, updates }) => {
+    updateImage: async (_, { id, input }) => {
       try {
-        const populationData = await Population.findByIdAndUpdate(id, updates, { new: true });
-        if (!populationData) {
-          throw new Error('Population data not found');
+        const updatedImage = await Image.findByIdAndUpdate(id, input, { new: true });
+        if (!updatedImage) {
+          throw new Error('Image not found');
         }
-        return populationData;
+        return updatedImage;
       } catch (error) {
-        throw new Error('Failed to update population data');
+        throw new Error('Failed to update image');
       }
     },
-
-    deletePopulationData: async (_, { id }) => {
+    deleteImage: async (_, { id }) => {
       try {
-        const populationData = await Population.findByIdAndDelete(id);
-        if (!populationData) {
-          throw new Error('Population data not found');
+        const deletedImage = await Image.findByIdAndDelete(id);
+        if (!deletedImage) {
+          throw new Error('Image not found');
         }
-        return populationData;
+        return deletedImage;
       } catch (error) {
-        throw new Error('Failed to delete population data');
+        throw new Error('Failed to delete image');
       }
     },
   },

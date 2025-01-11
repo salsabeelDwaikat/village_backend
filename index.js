@@ -1,77 +1,124 @@
-const dotenv = require('dotenv'); // Import dotenv
-dotenv.config(); // Load environment variables from .env file
-
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { ApolloServer } = require('apollo-server-express');
-const jwt = require('jsonwebtoken');
-const typeDefs = require('./schema'); // Import your GraphQL schema
-const resolvers = require('./resolvers'); // Import your GraphQL resolvers
-const User = require('./models/User'); // Import the User model
+const { graphqlHTTP } = require('express-graphql');
+const schema = require('./executableSchema');
 
-// Create Express app
+const Village = require('./models/Village');
+const Population = require('./models/Population');
+const Admin = require('./models/Admin');
+const Message = require('./models/Message');
+const Image = require('./models/Image');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(
-  cors({
-    origin: 'http://localhost:3000', // Allow requests from your React app
-    credentials: true, // Allow cookies and authentication headers
-  })
-);
-app.use(express.json()); // Parse incoming JSON data
-
-// Debug: Check if MONGODB_URI is loaded
-console.log('MONGODB_URI:', process.env.MONGODB_URI);
-
-// Connect to MongoDB
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.log(err));
-
-// Function to authenticate the user using the JWT token
-const authenticateUser = async (req) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id); // Fetch the user from the database
-      return user;
-    } catch (error) {
-      throw new Error('Invalid or expired token');
-    }
-  }
-  return null;
-};
-
-// Create Apollo Server
-const server = new ApolloServer({
-  typeDefs,
-  resolvers,
-  context: async ({ req }) => {
-    const user = await authenticateUser(req);
-    return { user }; // Attach the user to the context
-  },
-});
-
-// Start Apollo Server and apply middleware to Express app
-async function startServer() {
-  await server.start();
-  server.applyMiddleware({ app, path: '/graphql' }); // Set the GraphQL endpoint to /graphql
+if (!process.env.MONGODB_URI) {
+  console.error('Missing MONGODB_URI in environment variables.');
+  process.exit(1);
 }
 
-startServer();
+app.use(cors());
+app.use(express.json());
 
-// Routes
-app.get('/', (req, res) => {
-  res.send('Welcome to the Village Management System API!');
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Server is healthy' });
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`GraphQL endpoint: http://localhost:${PORT}${server.graphqlPath}`);
-});
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log('Successfully connected to the database'))
+  .catch((err) => {
+    console.error('Error connecting to the database:', err);
+    process.exit(1);
+  });
+
+app.use(
+  '/graphql',
+  graphqlHTTP({
+    schema,
+    graphiql: true,
+  })
+);
+
+const seedDatabase = async () => {
+  try {
+    const villages = [
+      { name: 'Jaballa', population: 50000, landArea: 10, urbanAreas: 2, coordinates: { lat: 32.2211, lng: 35.2544 } },
+      { name: 'Bett Lahia', population: 75000, landArea: 12, urbanAreas: 3, coordinates: { lat: 32.2311, lng: 35.2644 } },
+    ];
+
+    const populations = [
+      { villageId: null, ageGroup: '0-18', gender: 'Male', count: 10000 },
+      { villageId: null, ageGroup: '0-18', gender: 'Female', count: 9000 },
+      { villageId: null, ageGroup: '19-35', gender: 'Male', count: 15000 },
+      { villageId: null, ageGroup: '19-35', gender: 'Female', count: 14000 },
+    ];
+
+    const admins = [
+      { name: 'John Doe', image: 'john.jpg' },
+      { name: 'Jane Smith', image: 'jane.jpg' },
+    ];
+
+    const messages = [
+      { sender: 'Alice', text: 'Hello, world!', timestamp: new Date() },
+      { sender: 'Bob', text: 'Hi there!', timestamp: new Date() },
+    ];
+
+    const images = [
+      { imageUrl: 'image1.jpg', description: 'A beautiful sunset' },
+      { imageUrl: 'image2.jpg', description: 'A cute puppy' },
+    ];
+
+    await Village.deleteMany({});
+    await Population.deleteMany({});
+    await Admin.deleteMany({});
+    await Message.deleteMany({});
+    await Image.deleteMany({});
+    console.log('Cleared existing data');
+
+    const savedVillages = await Village.insertMany(villages);
+    populations.forEach(pop => pop.villageId = savedVillages[0]._id);
+    await Population.insertMany(populations);
+    console.log('Inserted villages and population data');
+
+    await Admin.insertMany(admins);
+    await Message.insertMany(messages);
+    await Image.insertMany(images);
+    console.log('Inserted admins, messages, and images');
+
+    console.log('Database seeded successfully');
+  } catch (err) {
+    console.error('Error seeding database:', err);
+  }
+};
+
+if (process.env.SEED_DB === 'true') {
+  seedDatabase().then(() => {
+    console.log('Seeding completed. Starting server...');
+    startServer();
+  });
+} else {
+  startServer();
+}
+
+function startServer() {
+  const server = app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+
+  const shutdown = () => {
+    console.log('Shutting down server...');
+    server.close(() => {
+      console.log('Server shut down.');
+      mongoose.connection.close(false, () => {
+        console.log('MongoDB connection closed.');
+        process.exit(0);
+      });
+    });
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
